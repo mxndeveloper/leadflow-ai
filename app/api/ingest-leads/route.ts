@@ -1,29 +1,19 @@
+import { sql } from '@/lib/db';
 import { NextResponse } from 'next/server';
-import { db, type Lead } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const leads = Array.isArray(body) ? body : [body];
 
-    await db.read();
-
-    const newLeads: Lead[] = leads.map((lead, idx) => ({
-      id: `${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 6)}`,
-      address: lead.address || null,
-      price: lead.price ? Number(lead.price) : null,
-      owner_name: lead.owner_name || null,
-      phone: lead.phone || null,
-      days_on_market: lead.days_on_market ? Number(lead.days_on_market) : null,
-      motivation_score: null,
-      status: 'new',
-      created_at: new Date().toISOString(),
-    }));
-
-    db.data.leads.push(...newLeads);
-    await db.write();
-
-    return NextResponse.json({ success: true, inserted: newLeads.length });
+    for (const lead of leads) {
+      const id = `${Date.now()}-${Math.random(). toString(36).substring(2, 8)}`;
+      await sql`
+        INSERT INTO leads (id, address, price, owner_name, phone, days_on_market, status, created_at)
+        VALUES (${id}, ${lead.address || null}, ${lead.price || null}, ${lead.owner_name || null}, ${lead.phone || null}, ${lead.days_on_market || null}, 'new', NOW())
+      `;
+    }
+    return NextResponse.json({ success: true, inserted: leads.length });
   } catch (err: unknown) {
     console.error(err);
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -32,6 +22,6 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  await db.read();
-  return NextResponse.json(db.data.leads);
+  const rows = await sql`SELECT * FROM leads ORDER BY created_at DESC`;
+  return NextResponse.json(rows);
 }

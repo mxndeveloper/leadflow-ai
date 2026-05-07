@@ -1,8 +1,8 @@
-import NextAuth, { NextAuthOptions } from 'next-auth';
+import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { db } from '@/lib/db';
+import { sql } from '@/lib/db';
 
-export const authOptions: NextAuthOptions = {
+const handler = NextAuth({
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -11,56 +11,45 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
+        console.log('Authorize called with:', credentials?.email);
         if (!credentials?.email || !credentials?.password) return null;
 
-        await db.read();
-        const user = db.data.users.find(
-          (u) => u.email === credentials.email && u.password === credentials.password
-        );
-
-        if (user) {
-          return { id: user.id, email: user.email };
+        try {
+          const users = await sql`
+            SELECT id, email, password FROM users WHERE email = ${credentials.email}
+          `;
+          console.log('Query result:', users);
+          const user = users[0];
+          if (user && user.password === credentials.password) {
+            return { id: user.id, email: user.email };
+          }
+        } catch (err) {
+          console.error('Auth DB error:', err);
+          return null;
         }
 
-        // Hardcoded test account (first run)
+        // Fallback hardcoded (in case table missing)
         if (credentials.email === 'wife@agency.com' && credentials.password === 'test123') {
-          const existing = db.data.users.find((u) => u.email === 'wife@agency.com');
-          if (!existing) {
-            db.data.users.push({
-              id: '1',
-              email: 'wife@agency.com',
-              password: 'test123',
-            });
-            await db.write();
-          }
+          console.log('Using hardcoded fallback');
           return { id: '1', email: 'wife@agency.com' };
         }
-
         return null;
       },
     }),
   ],
-  session: {
-    strategy: 'jwt',
-  },
+  session: { strategy: 'jwt' },
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-      }
+      if (user) token.id = user.id;
       return token;
     },
     async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string;
-      }
+      if (token && session.user) session.user.id = token.id as string;
       return session;
     },
   },
-  pages: {
-    signIn: '/login',
-  },
-};
+  pages: { signIn: '/login' },
+  secret: process.env.NEXTAUTH_SECRET, // explicitly set
+});
 
-const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };

@@ -52,3 +52,6 @@ venv/
 
 # VS Code settings (optional)
 .vscode/
+
+.vercel
+.env*.local
