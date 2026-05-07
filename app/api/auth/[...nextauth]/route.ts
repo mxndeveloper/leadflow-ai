@@ -18,24 +18,45 @@ const handler = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
-
-        // Use admin client to fetch user
-        const { data: users, error } = await supabaseAdmin
-          .from('users')
-          .select('id, email, password')
-          .eq('email', credentials.email);
-
-        if (error || !users || users.length === 0) {
-          console.error('Auth error:', error);
+        // ✅ Guard against undefined credentials
+        if (!credentials?.email || !credentials?.password) {
+          console.log('Missing email or password');
           return null;
         }
 
-        const user = users[0];
-        if (user.password === credentials.password) {
-          return { id: user.id, email: user.email };
-        }
+        console.log(`Auth attempt for email: ${credentials.email}`);
+        
+        try {
+          const { data: users, error } = await supabaseAdmin
+            .from('users')
+            .select('id, email, password')
+            .eq('email', credentials.email);
 
+          if (error) {
+            console.error('Supabase query error:', error);
+            return null;
+          }
+          
+          if (!users || users.length === 0) {
+            console.log(`No user found for email: ${credentials.email}`);
+            return null;
+          }
+
+          const user = users[0];
+          console.log(`User found: ${user.email}, password in DB: ${user.password}`);
+          console.log(`Provided password: ${credentials.password}`);
+          console.log(`Passwords match: ${user.password === credentials.password}`);
+
+          if (user.password === credentials.password) {
+            console.log('Authentication successful!');
+            return { id: user.id, email: user.email };
+          }
+        } catch (err) {
+          console.error('Unexpected error in authorizer:', err);
+          return null;
+        }
+        
+        console.log('Authentication failed.');
         return null;
       },
     }),
