@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { sql } from '@/lib/db';
+import { supabase } from '@/lib/db';
 
 const handler = NextAuth({
   providers: [
@@ -11,26 +11,17 @@ const handler = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        console.log('Authorize called with:', credentials?.email);
         if (!credentials?.email || !credentials?.password) return null;
-
-        try {
-          const users = await sql`
-            SELECT id, email, password FROM users WHERE email = ${credentials.email}
-          `;
-          console.log('Query result:', users);
-          const user = users[0];
-          if (user && user.password === credentials.password) {
-            return { id: user.id, email: user.email };
-          }
-        } catch (err) {
-          console.error('Auth DB error:', err);
-          return null;
-        }
-
-        // Fallback hardcoded (in case table missing)
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, email, password')
+          .eq('email', credentials.email);
+        if (error || !data || data.length === 0) return null;
+        const user = data[0];
+        if (user.password === credentials.password) return { id: user.id, email: user.email };
+        // one‑time test account creation
         if (credentials.email === 'wife@agency.com' && credentials.password === 'test123') {
-          console.log('Using hardcoded fallback');
+          await supabase.from('users').upsert({ id: '1', email: 'wife@agency.com', password: 'test123' });
           return { id: '1', email: 'wife@agency.com' };
         }
         return null;
@@ -39,17 +30,10 @@ const handler = NextAuth({
   ],
   session: { strategy: 'jwt' },
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) token.id = user.id;
-      return token;
-    },
-    async session({ session, token }) {
-      if (token && session.user) session.user.id = token.id as string;
-      return session;
-    },
+    async jwt({ token, user }) { if (user) token.id = user.id; return token; },
+    async session({ session, token }) { if (token && session.user) session.user.id = token.id as string; return session; },
   },
   pages: { signIn: '/login' },
-  secret: process.env.NEXTAUTH_SECRET, // explicitly set
+  secret: process.env.NEXTAUTH_SECRET,
 });
-
 export { handler as GET, handler as POST };
