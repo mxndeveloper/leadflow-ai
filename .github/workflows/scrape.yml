@@ -1,49 +1,34 @@
-import cianparser
-import requests
-import os
-import sys
+name: Scrape CIAN Leads
 
-API_URL = os.environ.get('API_URL')
-if not API_URL:
-    print("ERROR: API_URL environment variable not set")
-    sys.exit(1)
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
-print(f"Scraping Cian for Moscow FSBO listings...")
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-parser = cianparser.CianParser(location="Москва")
-flats = parser.get_flats(
-    deal_type="sale",
-    rooms=(1, 4),
-    additional_settings={"start_page": 1, "end_page": 3}
-)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-fsbo_leads = []
-for flat in flats:
-    desc = flat.get("description", "").lower()
-    if "собственник" in desc:
-        fsbo_leads.append({
-            "address": flat.get("address"),
-            "price": flat.get("price"),
-            "owner_name": flat.get("owner_name", ""),
-            "phone": flat.get("phone", ""),
-            "days_on_market": flat.get("days_on_market", 0)
-        })
+      - name: Install dependencies
+        run: pip install cianparser requests
 
-if not fsbo_leads:
-    print("No FSBO leads found.")
-    sys.exit(0)
+      - name: Test API connectivity
+        run: |
+          curl -X POST $API_URL \
+            -H "Content-Type: application/json" \
+            -d '[{"address":"GH Action test","price":123}]'
+        env:
+          API_URL: ${{ secrets.API_URL }}
 
-print(f"Sending {len(fsbo_leads)} leads to {API_URL}")
-
-response = requests.post(
-    API_URL,
-    json=fsbo_leads,
-    headers={"Content-Type": "application/json"},
-    timeout=60
-)
-
-if response.status_code == 200:
-    print("Success:", response.json())
-else:
-    print(f"Error {response.status_code}: {response.text}")
-    sys.exit(1)
+      - name: Run scraper
+        run: python scripts/scrape_and_post.py
+        env:
+          API_URL: ${{ secrets.API_URL }}
