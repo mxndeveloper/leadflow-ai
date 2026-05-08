@@ -1,0 +1,49 @@
+import cianparser
+import requests
+import os
+import sys
+
+API_URL = os.environ.get('API_URL')
+if not API_URL:
+    print("ERROR: API_URL environment variable not set")
+    sys.exit(1)
+
+print(f"Scraping Cian for Moscow FSBO listings...")
+
+parser = cianparser.CianParser(location="Москва")
+flats = parser.get_flats(
+    deal_type="sale",
+    rooms=(1, 4),
+    additional_settings={"start_page": 1, "end_page": 3}
+)
+
+fsbo_leads = []
+for flat in flats:
+    desc = flat.get("description", "").lower()
+    if "собственник" in desc:
+        fsbo_leads.append({
+            "address": flat.get("address"),
+            "price": flat.get("price"),
+            "owner_name": flat.get("owner_name", ""),
+            "phone": flat.get("phone", ""),
+            "days_on_market": flat.get("days_on_market", 0)
+        })
+
+if not fsbo_leads:
+    print("No FSBO leads found.")
+    sys.exit(0)
+
+print(f"Sending {len(fsbo_leads)} leads to {API_URL}")
+
+response = requests.post(
+    API_URL,
+    json=fsbo_leads,
+    headers={"Content-Type": "application/json"},
+    timeout=60
+)
+
+if response.status_code == 200:
+    print("Success:", response.json())
+else:
+    print(f"Error {response.status_code}: {response.text}")
+    sys.exit(1)
