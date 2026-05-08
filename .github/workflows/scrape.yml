@@ -22,7 +22,7 @@ jobs:
 
       - name: Test API connectivity
         run: |
-          curl -X POST $API_URL \
+          curl -X POST "$API_URL" \
             -H "Content-Type: application/json" \
             -d '[{"address":"GH Action test","price":123}]'
         env:
