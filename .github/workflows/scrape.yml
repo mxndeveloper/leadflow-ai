@@ -18,7 +18,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install cianparser requests
+        run: pip install requests beautifulsoup4
 
       - name: Test API connectivity
         run: |
